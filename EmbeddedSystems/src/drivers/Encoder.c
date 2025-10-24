@@ -1,4 +1,5 @@
 
+
 #include "Encoder.h"
 
 // Helper to encode pin states into a 2-bit value
