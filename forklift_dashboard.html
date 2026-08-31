@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoLift — ESP8266-01 Control System</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --yellow:#F5C400; --dark:#0d0f12; --panel:#13181f;
+    --panel2:#1a2230; --border:#2a3a4a; --text:#e0eaf8;
+    --muted:#6a8099; --green:#1de98b; --red:#ff4d4d; --blue:#3a9bdc;
+    --orange:#ff8c00; --purple:#a855f7;
+  }
+  body {
+    background:#080a0d;
+    display:flex; align-items:flex-start; justify-content:center;
+    min-height:100vh; padding:24px;
+  }
+  .root {
+    background:var(--dark); color:var(--text);
+    font-family:'Rajdhani',sans-serif;
+    width:100%; max-width:1340px;
+    padding:22px; border-radius:14px;
+    border:1px solid var(--border);
+  }
+
+  /* ── Header ── */
+  .header {
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:18px;
+  }
+  .logo { display:flex; align-items:center; gap:10px; }
+  .logo-icon {
+    width:38px; height:38px; background:var(--yellow);
+    border-radius:8px; display:flex; align-items:center;
+    justify-content:center; color:var(--dark); font-size:22px;
+  }
+  .logo-text { font-size:22px; font-weight:700; letter-spacing:2px; color:var(--yellow); text-transform:uppercase; }
+  .logo-sub  { font-size:11px; color:var(--muted); letter-spacing:3px; text-transform:uppercase; font-family:'Share Tech Mono',monospace; }
+  .status-bar { display:flex; align-items:center; gap:8px; font-family:'Share Tech Mono',monospace; font-size:12px; color:var(--muted); }
+  .status-dot { width:9px; height:9px; border-radius:50%; background:var(--red); }
+  .status-dot.ok { background:var(--green); animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* ── Connection bar ── */
+  .conn-bar {
+    display:flex; align-items:center; gap:8px;
+    background:var(--panel2); border:1px solid var(--border);
+    border-radius:8px; padding:10px 14px; margin-bottom:16px; flex-wrap:wrap;
+  }
+  .conn-bar input {
+    flex:1; min-width:160px; background:var(--panel);
+    border:1px solid var(--border); border-radius:6px;
+    padding:6px 10px; color:var(--text);
+    font-family:'Share Tech Mono',monospace; font-size:12px;
+  }
+  .conn-bar input:focus { outline:none; border-color:var(--yellow); }
+  .conn-btn {
+    padding:6px 18px; border-radius:6px; border:1px solid var(--yellow);
+    background:transparent; color:var(--yellow);
+    font-family:'Rajdhani',sans-serif; font-weight:600; font-size:14px;
+    letter-spacing:1px; cursor:pointer; transition:all .15s; white-space:nowrap;
+  }
+  .conn-btn:hover { background:var(--yellow); color:var(--dark); }
+  .conn-status { font-family:'Share Tech Mono',monospace; font-size:11px; color:var(--muted); }
+
+  /* ── Mode selector bar ── */
+  .mode-bar {
+    display:flex; align-items:center; gap:10px;
+    background:var(--panel2); border:1px solid var(--border);
+    border-radius:8px; padding:10px 14px; margin-bottom:16px; flex-wrap:wrap;
+  }
+  .mode-label { font-family:'Share Tech Mono',monospace; font-size:10px; color:var(--muted); letter-spacing:3px; white-space:nowrap; }
+  .mode-btn {
+    padding:7px 20px; border-radius:6px; border:1px solid var(--border);
+    background:var(--panel); color:var(--muted);
+    font-family:'Rajdhani',sans-serif; font-weight:700; font-size:14px;
+    letter-spacing:2px; cursor:pointer; transition:all .2s;
+    display:flex; align-items:center; gap:7px; white-space:nowrap;
+  }
+  .mode-btn:hover { border-color:var(--yellow); color:var(--text); }
+  .mode-btn.active-manual { background:#1a2008; border-color:var(--yellow); color:var(--yellow); }
+  .mode-btn.active-auto   { background:#0d1a2e; border-color:var(--purple); color:var(--purple); box-shadow:0 0 12px rgba(168,85,247,0.25); }
+  .mode-indicator {
+    margin-left:auto; display:flex; align-items:center; gap:8px;
+    font-family:'Share Tech Mono',monospace; font-size:11px;
+  }
+  .mode-dot { width:8px; height:8px; border-radius:50%; background:var(--muted); transition:all .3s; }
+  .mode-dot.manual { background:var(--yellow); }
+  .mode-dot.auto   { background:var(--purple); animation:pulse 1.5s infinite; }
+
+  /* ── Side-by-side camera panels ── */
+  .camera-row {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px;
+    margin-bottom:14px;
+    align-items:start;
+  }
+  .camera-row.single-cam { grid-template-columns:1fr; }
+  .camera-row .kinect-panel { margin-bottom:0; }
+  @media (max-width:900px) {
+    .camera-row { grid-template-columns:1fr; }
+  }
+
+  /* ── Two-column main layout ── */
+  .main-grid {
+    display:grid;
+    grid-template-columns:1fr 420px;
+    gap:14px;
+    align-items:start;
+  }
+
+  /* ── Panels ── */
+  .panel {
+    background:var(--panel); border:1px solid var(--border);
+    border-radius:10px; padding:18px; margin-bottom:14px;
+  }
+  .panel:last-child { margin-bottom:0; }
+  .panel-title {
+    font-size:11px; letter-spacing:3px; color:var(--muted);
+    text-transform:uppercase; font-family:'Share Tech Mono',monospace;
+    margin-bottom:14px;
+  }
+
+  /* ── Camera Panel (shared Kinect / Webcam) ── */
+  .kinect-panel {
+    background:var(--panel); border:1px solid var(--border);
+    border-radius:10px; margin-bottom:14px; overflow:hidden;
+  }
+  .kinect-header {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 14px; border-bottom:1px solid var(--border);
+  }
+  .kinect-title {
+    display:flex; align-items:center; gap:8px;
+    font-size:11px; letter-spacing:3px; color:var(--muted);
+    text-transform:uppercase; font-family:'Share Tech Mono',monospace;
+  }
+  .kinect-badges { display:flex; gap:6px; align-items:center; }
+  .badge {
+    padding:2px 8px; border-radius:4px; border:1px solid var(--border);
+    font-family:'Share Tech Mono',monospace; font-size:10px; color:var(--muted);
+    letter-spacing:1px;
+  }
+  .badge.mode-depth  { border-color:#3a9bdc; color:#3a9bdc; }
+  .badge.mode-auto   { border-color:var(--purple); color:var(--purple); }
+  .badge.offline     { border-color:var(--red); color:var(--red); }
+  .badge.online      { border-color:var(--green); color:var(--green); }
+  .badge.estop       { border-color:var(--red); color:var(--red); animation:pulse 0.6s infinite; }
+
+  .kinect-viewport {
+    position:relative; width:100%; padding-bottom:56.25%;
+    background:#000; overflow:hidden;
+  }
+  .kinect-viewport img { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:contain; }
+  .kinect-offline-overlay {
+    position:absolute; top:0; left:0; width:100%; height:100%;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:10px; background:#000;
+  }
+  .kinect-offline-overlay i { font-size:48px; color:var(--border); }
+  .kinect-offline-overlay .msg { font-family:'Share Tech Mono',monospace; font-size:12px; color:var(--muted); text-align:center; line-height:1.8; }
+  .kinect-offline-overlay .msg span { color:var(--yellow); }
+
+  /* Emergency stop overlay on video */
+  .estop-overlay {
+    position:absolute; top:0; left:0; width:100%; height:100%;
+    display:none; align-items:center; justify-content:center;
+    background:rgba(180,0,0,0.35); z-index:10;
+    font-family:'Rajdhani',sans-serif; font-size:28px; font-weight:700;
+    color:#fff; letter-spacing:4px; text-shadow:0 0 20px #ff0000;
+    animation:estop-flash 0.7s infinite;
+  }
+  @keyframes estop-flash { 0%,100%{opacity:1} 50%{opacity:0.5} }
+  .estop-overlay.active { display:flex; }
+
+  .kinect-footer {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:8px 14px; border-top:1px solid var(--border); flex-wrap:wrap; gap:8px;
+  }
+  .kinect-sub { display:flex; align-items:center; gap:6px; font-family:'Share Tech Mono',monospace; font-size:10px; color:var(--muted); letter-spacing:2px; }
+  .stream-btn {
+    padding:5px 14px; border-radius:6px; border:1px solid var(--yellow);
+    background:transparent; color:var(--yellow);
+    font-family:'Rajdhani',sans-serif; font-weight:600; font-size:12px;
+    letter-spacing:1px; cursor:pointer; transition:all .15s;
+    display:flex; align-items:center; gap:5px;
+  }
+  .stream-btn:hover  { background:var(--yellow); color:var(--dark); }
+  .stream-btn.active { background:var(--red); border-color:var(--red); color:#fff; }
+
+  .blend-row { display:flex; align-items:center; gap:8px; }
+  .blend-label { font-family:'Share Tech Mono',monospace; font-size:10px; color:var(--muted); letter-spacing:2px; white-space:nowrap; }
+  input[type=range].blend-slider { flex:1; accent-color:#3a9bdc; }
+  .blend-pct { font-family:'Share Tech Mono',monospace; font-size:11px; color:#3a9bdc; min-width:32px; text-align:right; }
+
+  /* ── Detection log ── */
+  .det-log-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .no-detect { font-family:'Share Tech Mono',monospace; font-size:10px; color:var(--muted); letter-spacing:2px; }
+
+  /* ── Joystick ── */
+  .joystick-layout { display:flex; flex-direction:column; align-items:center; gap:10px; }
+  .joy-row { display:flex; gap:10px; align-items:center; }
+  .joy-btn {
+    width:68px; height:68px; border-radius:12px;
+    border:1px solid var(--border); background:var(--panel2);
+    color:var(--text); font-size:26px; cursor:pointer;
+    transition:all .1s; display:flex; align-items:center;
+    justify-content:center; user-select:none; -webkit-user-select:none;
+  }
+  .joy-btn:hover  { border-color:var(--yellow); background:#1f2d3d; }
+  .joy-btn.pressed { background:var(--yellow); color:var(--dark); border-color:var(--yellow); transform:scale(0.93); }
+  .joy-btn:disabled, .joy-btn[disabled] { opacity:0.3; cursor:not-allowed; pointer-events:none; }
+  .joy-center {
+    width:68px; height:68px; border-radius:50%;
+    background:var(--panel2); border:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .joy-dot { width:20px; height:20px; border-radius:50%; background:var(--muted); transition:all .12s; }
+
+  /* ── Fork controls ── */
+  .fork-controls { display:flex; gap:8px; margin-top:16px; width:100%; }
+  .fork-btn {
+    flex:1; padding:12px; border-radius:8px;
+    border:1px solid var(--border); background:var(--panel2);
+    color:var(--text); font-family:'Rajdhani',sans-serif;
+    font-size:14px; font-weight:600; letter-spacing:1px;
+    cursor:pointer; transition:all .1s;
+    display:flex; align-items:center; justify-content:center; gap:6px;
+  }
+  .fork-btn:hover { border-color:var(--blue); color:var(--blue); }
+  .fork-btn.active { background:var(--blue); color:#fff; border-color:var(--blue); }
+  .fork-stop-btn { flex:0.55; border-color:var(--red); color:var(--red); }
+  .fork-stop-btn:hover { background:var(--red); color:#fff; border-color:var(--red); }
+
+  /* ── Speed slider ── */
+  .speed-group { margin-top:16px; }
+  .speed-row { display:flex; align-items:center; gap:10px; margin-top:6px; }
+  .speed-label { font-family:'Share Tech Mono',monospace; font-size:10px; color:var(--muted); letter-spacing:2px; min-width:38px; }
+  input[type=range] { flex:1; accent-color:var(--yellow); }
+  .speed-val { font-family:'Share Tech Mono',monospace; font-size:13px; color:var(--yellow); min-width:28px; text-align:right; }
+
+  /* ── Telemetry ── */
+  .telemetry { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:14px; }
+  .tele-card { background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
+  .tele-label { font-family:'Share Tech Mono',monospace; font-size:9px; color:var(--muted); letter-spacing:1px; margin-bottom:4px; }
+  .tele-value { font-family:'Share Tech Mono',monospace; font-size:16px; color:var(--text); font-weight:500; }
+  .tele-value.ok   { color:var(--green); }
+  .tele-value.warn { color:var(--yellow); }
+  .tele-value.err  { color:var(--red); }
+  .tele-value.auto { color:var(--purple); }
+
+  /* ── Log ── */
+  .log-box {
+    background:var(--panel2); border:1px solid var(--border); border-radius:8px;
+    padding:9px 13px; font-family:'Share Tech Mono',monospace;
+    font-size:10px; color:var(--muted);
+    margin-top:12px; min-height:56px; max-height:110px; overflow-y:auto; line-height:1.8;
+  }
+  .log-entry      { color:var(--green); }
+  .log-entry.warn { color:var(--yellow); }
+  .log-entry.err  { color:var(--red); }
+  .log-entry.auto { color:var(--purple); }
+
+  /* ── Emergency stop bar ── */
+  .estop-btn {
+    width:100%; padding:16px; margin-bottom:14px;
+    background:#2e0d0d; border:2px solid var(--red); border-radius:8px;
+    color:var(--red); font-family:'Rajdhani',sans-serif;
+    font-size:18px; font-weight:700; letter-spacing:4px;
+    cursor:pointer; transition:all .15s; text-transform:uppercase;
+    display:flex; align-items:center; justify-content:center; gap:10px;
+  }
+  .estop-btn:hover { background:var(--red); color:#fff; box-shadow:0 0 20px rgba(255,77,77,0.5); }
+  .estop-btn.engaged {
+    background:var(--red); color:#fff;
+    animation:pulse 0.7s infinite;
+    box-shadow:0 0 24px rgba(255,77,77,0.7);
+  }
+
+  /* ── Clear E-stop button ── */
+  .clear-estop-btn {
+    width:100%; padding:10px; margin-bottom:14px;
+    background:transparent; border:1px solid var(--green); border-radius:8px;
+    color:var(--green); font-family:'Rajdhani',sans-serif;
+    font-size:14px; font-weight:600; letter-spacing:2px;
+    cursor:pointer; transition:all .15s;
+    display:none; align-items:center; justify-content:center; gap:8px;
+  }
+  .clear-estop-btn:hover { background:var(--green); color:var(--dark); }
+  .clear-estop-btn.visible { display:flex; }
+
+  /* ── Auto mode info panel ── */
+  .auto-info {
+    background:#0d0d1f; border:1px solid var(--purple);
+    border-radius:8px; padding:14px 16px; margin-bottom:14px;
+    display:none;
+  }
+  .auto-info.visible { display:block; }
+  .auto-info-title {
+    font-family:'Share Tech Mono',monospace; font-size:10px;
+    color:var(--purple); letter-spacing:3px; margin-bottom:10px;
+  }
+  .auto-stat-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .auto-stat { background:var(--panel2); border:1px solid var(--border); border-radius:6px; padding:8px 10px; }
+  .auto-stat-label { font-family:'Share Tech Mono',monospace; font-size:9px; color:var(--muted); letter-spacing:1px; margin-bottom:3px; }
+  .auto-stat-value { font-family:'Share Tech Mono',monospace; font-size:14px; color:var(--purple); }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .main-grid { grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="root">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">
+      <div class="logo-icon"><i class="ti ti-forklift" style="font-size:20px"></i></div>
+      <div>
+        <div class="logo-text">AutoLift</div>
+        <div class="logo-sub">ESP8266-01 — Manual / Autonomous Control</div>
+      </div>
+    </div>
+    <div class="status-bar">
+      <div class="status-dot" id="hw-dot"></div>
+      <span id="hw-label">DISCONNECTED</span>
+      <span style="margin-left:14px;color:var(--text);font-size:11px" id="clock">--:--:--</span>
+    </div>
+  </div>
+
+  <!-- Connection bar -->
+  <div class="conn-bar">
+    <i class="ti ti-cpu" style="color:var(--muted);font-size:16px"></i>
+    <input type="text" id="bridge-url" value="http://127.0.0.1:5000" placeholder="Bridge URL (main.py)">
+    <button class="conn-btn" onclick="connectBridge()">Connect WiFi</button>
+    <span class="conn-status" id="conn-status">Not connected</span>
+  </div>
+
+  <!-- ═══ MODE SELECTOR BAR ═══ -->
+  <div class="mode-bar">
+    <span class="mode-label">MODE:</span>
+    <button class="mode-btn active-manual" id="btn-manual" onclick="setMode('manual')">
+      <i class="ti ti-steering-wheel"></i> Manual
+    </button>
+    <button class="mode-btn" id="btn-auto" onclick="setMode('auto')">
+      <i class="ti ti-robot"></i> Autonomous
+    </button>
+    <div class="mode-indicator">
+      <div class="mode-dot manual" id="mode-dot"></div>
+      <span id="mode-label-badge" style="font-size:11px;letter-spacing:2px">MANUAL</span>
+    </div>
+  </div>
+
+  <!-- Camera panels: full width, side-by-side in auto, big single window in manual -->
+  <div class="camera-row" id="camera-row">
+
+  <!-- Camera stream panel -->
+  <div class="kinect-panel">
+    <div class="kinect-header">
+          <div class="kinect-title" id="cam-title">
+            <i class="ti ti-camera" style="font-size:14px"></i>
+            <span id="cam-title-text">Kinect V2 — Live Depth Feed</span>
+          </div>
+          <div class="kinect-badges">
+            <span class="badge" id="fps-badge">-- fps</span>
+            <span class="badge mode-depth" id="cam-mode-badge">DEPTH</span>
+            <span class="badge offline" id="stream-status-badge">OFFLINE</span>
+            <span class="badge estop" id="estop-cam-badge" style="display:none">⚠ E-STOP</span>
+          </div>
+        </div>
+
+        <!-- Video viewport -->
+        <div class="kinect-viewport" id="kinect-viewport">
+          <div class="kinect-offline-overlay" id="kinect-offline">
+            <i class="ti ti-camera-off"></i>
+            <div class="msg" id="offline-msg">
+              Camera not streaming<br>
+              Connect bridge, then click ▶ Start Stream<br>
+              <span>In Auto mode the webcam starts automatically</span>
+            </div>
+          </div>
+          <img id="kinect-stream" src="" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; object-fit:contain;" alt="Camera Stream">
+          <!-- Emergency stop overlay on video -->
+          <div class="estop-overlay" id="estop-video-overlay">
+            ⛔ EMERGENCY STOP
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="kinect-footer">
+          <div class="kinect-sub">
+            <i class="ti ti-aperture" style="font-size:12px"></i>
+            <span id="cam-footer-label">Kinect V2 Depth Stream</span>
+          </div>
+          <button class="stream-btn" id="stream-toggle-btn" onclick="toggleStream()">
+            <i class="ti ti-player-play" id="stream-btn-icon"></i>
+            <span id="stream-btn-label">Start Stream</span>
+          </button>
+        </div>
+        <div id="depth-blend-row" style="padding:8px 14px 12px; border-top:1px solid var(--border);">
+          <div class="blend-row">
+            <i class="ti ti-adjustments" style="font-size:12px;color:var(--muted)"></i>
+            <span class="blend-label">DEPTH BLEND</span>
+            <input type="range" class="blend-slider" min="0" max="100" value="40" id="depth-blend" oninput="updateBlend(this.value)">
+            <span class="blend-pct" id="blend-pct">40%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Webcam / Line-follower panel (autonomous mode only) -->
+      <div class="kinect-panel" id="webcam-panel" style="display:none">
+        <div class="kinect-header">
+          <div class="kinect-title">
+            <i class="ti ti-camera" style="font-size:14px"></i>
+            <span>Webcam — Line Follower Feed</span>
+          </div>
+          <div class="kinect-badges">
+            <span class="badge" id="fps-badge-2">-- fps</span>
+            <span class="badge mode-auto" id="cam-mode-badge-2">LINE FOLLOW</span>
+            <span class="badge offline" id="stream-status-badge-2">OFFLINE</span>
+          </div>
+        </div>
+
+        <!-- Video viewport -->
+        <div class="kinect-viewport" id="webcam-viewport">
+          <div class="kinect-offline-overlay" id="webcam-offline">
+            <i class="ti ti-camera-off"></i>
+            <div class="msg">
+              Webcam stream not active<br>
+              <span>Starts automatically in Autonomous mode</span>
+            </div>
+          </div>
+          <img id="webcam-stream" src="" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; object-fit:contain;" alt="Webcam Stream">
+        </div>
+
+        <!-- Footer -->
+        <div class="kinect-footer">
+          <div class="kinect-sub">
+            <i class="ti ti-aperture" style="font-size:12px"></i>
+            <span>Webcam — Autonomous Feed</span>
+          </div>
+        </div>
+      </div>
+
+  </div><!-- /camera-row -->
+
+  <!-- Two-column layout -->
+  <div class="main-grid">
+
+    <!-- LEFT: Detection log -->
+    <div>
+
+      <!-- Detection log -->
+      <div class="panel">
+        <div class="det-log-header">
+          <div class="panel-title" style="margin-bottom:0">Detection Log</div>
+          <span class="no-detect" id="detect-status">NO DETECTIONS</span>
+        </div>
+        <div class="log-box" id="log">
+          <div class="log-entry warn">[ SYSTEM ] Connect bridge, select mode, then start.</div>
+        </div>
+      </div>
+
+    </div><!-- /left col -->
+
+    <!-- RIGHT: controls -->
+    <div>
+
+      <!-- ═══ EMERGENCY STOP BUTTON ═══ -->
+      <button class="estop-btn" id="estop-main-btn" onclick="triggerEmergencyStop()">
+        <i class="ti ti-alert-octagon" style="font-size:20px"></i>
+        EMERGENCY STOP
+      </button>
+
+      <!-- Clear E-stop -->
+      <button class="clear-estop-btn" id="clear-estop-btn" onclick="clearEmergencyStop()">
+        <i class="ti ti-refresh"></i> Clear Emergency Stop &amp; Resume
+      </button>
+
+      <!-- Auto mode info panel (shown only in auto) -->
+      <div class="auto-info" id="auto-info">
+        <div class="auto-info-title">▸ AUTONOMOUS — LINE FOLLOWER ACTIVE</div>
+        <div class="auto-stat-grid">
+          <div class="auto-stat"><div class="auto-stat-label">STEER ANGLE</div><div class="auto-stat-value" id="auto-angle">0.0°</div></div>
+          <div class="auto-stat"><div class="auto-stat-label">PID ERROR</div><div class="auto-stat-value" id="auto-err">0 px</div></div>
+          <div class="auto-stat"><div class="auto-stat-label">CMD</div><div class="auto-stat-value" id="auto-cmd">—</div></div>
+          <div class="auto-stat"><div class="auto-stat-label">PERSON DETECT</div><div class="auto-stat-value" id="auto-person">CLEAR</div></div>
+        </div>
+        <div class="log-box" id="auto-log" style="margin-top:10px">
+          <div class="log-entry auto">[ AUTO ] Waiting to start…</div>
+        </div>
+      </div>
+
+      <!-- Manual Drive panel -->
+      <div class="panel" id="manual-panel">
+        <div class="panel-title">Manual Drive</div>
+        <div class="joystick-layout">
+          <div class="joy-row">
+            <button class="joy-btn" id="jforward"
+              onpointerdown="joyPress('forward')" onpointerup="joyRelease('forward')" onpointerleave="joyRelease('forward')">▲</button>
+          </div>
+          <div class="joy-row">
+            <button class="joy-btn" id="jleft"
+              onpointerdown="joyPress('left')" onpointerup="joyRelease('left')" onpointerleave="joyRelease('left')">◀</button>
+            <div class="joy-center"><div class="joy-dot" id="joy-dot"></div></div>
+            <button class="joy-btn" id="jright"
+              onpointerdown="joyPress('right')" onpointerup="joyRelease('right')" onpointerleave="joyRelease('right')">▶</button>
+          </div>
+          <div class="joy-row">
+            <button class="joy-btn" id="jbackward"
+              onpointerdown="joyPress('backward')" onpointerup="joyRelease('backward')" onpointerleave="joyRelease('backward')">▼</button>
+          </div>
+        </div>
+
+        <!-- Fork controls -->
+        <div class="fork-controls">
+          <button class="fork-btn" id="fork-up-btn"
+            onpointerdown="forkCmd('up')" onpointerup="forkCmd('stop')" onpointerleave="forkCmd('stop')">
+            <i class="ti ti-arrow-bar-up"></i> Fork Up
+          </button>
+          <button class="fork-btn fork-stop-btn" onclick="forkCmd('stop')">
+            <i class="ti ti-square"></i>
+          </button>
+          <button class="fork-btn" id="fork-dn-btn"
+            onpointerdown="forkCmd('down')" onpointerup="forkCmd('stop')" onpointerleave="forkCmd('stop')">
+            <i class="ti ti-arrow-bar-down"></i> Fork Down
+          </button>
+        </div>
+
+        <!-- Speed slider -->
+        <div class="speed-group">
+          <div class="panel-title" style="margin-bottom:0;font-size:10px">Drive Speed (0-80)</div>
+          <div class="speed-row">
+            <span class="speed-label">SLOW</span>
+            <input type="range" min="0" max="80" value="50" step="5" id="speed-slider" oninput="updateSpeed(this.value)">
+            <span class="speed-label" style="text-align:right">FAST</span>
+            <span class="speed-val" id="speed-disp">50</span>
+          </div>
+        </div>
+
+        <!-- Telemetry mini -->
+        <div class="telemetry">
+          <div class="tele-card"><div class="tele-label">DIR</div>    <div class="tele-value err"  id="tele-dir">---</div></div>
+          <div class="tele-card"><div class="tele-label">FORK</div>   <div class="tele-value"      id="tele-fork">STOPPED</div></div>
+          <div class="tele-card"><div class="tele-label">SPEED</div>  <div class="tele-value warn" id="tele-speed">50</div></div>
+          <div class="tele-card"><div class="tele-label">STEER°</div> <div class="tele-value"      id="tele-steer">0.0</div></div>
+        </div>
+
+        <!-- Mode telemetry -->
+        <div class="telemetry" style="margin-top:8px;grid-template-columns:1fr 1fr">
+          <div class="tele-card">
+            <div class="tele-label">MODE</div>
+            <div class="tele-value" id="tele-mode" style="color:var(--yellow)">MANUAL</div>
+          </div>
+          <div class="tele-card">
+            <div class="tele-label">STATUS</div>
+            <div class="tele-value ok" id="tele-status">READY</div>
+          </div>
+        </div>
+
+        <!-- Right-side log -->
+        <div class="log-box" id="ctrl-log">
+          <div class="log-entry">[ MANUAL ] Connect bridge, then use controls to drive.</div>
+        </div>
+      </div>
+
+    </div><!-- /right col -->
+  </div><!-- /main-grid -->
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════
+let bridgeUrl    = 'http://127.0.0.1:5000';
+let bridgeOk     = false;
+let activeDir    = null;
+let manSpeed     = 50;
+let telemTimer   = null;
+let currentMode  = 'manual';   // 'manual' | 'auto'
+let streamActive = false;
+let fpsTimer     = null;
+let frameCount   = 0;
+let lastFpsTime  = Date.now();
+let isEStop      = false;
+let autoRunning  = false;
+
+// ═══════════════════════════════════════════════════════════
+// CLOCK
+// ═══════════════════════════════════════════════════════════
+setInterval(() => {
+  document.getElementById('clock').textContent = new Date().toTimeString().slice(0, 8);
+}, 1000);
+
+// ═══════════════════════════════════════════════════════════
+// BRIDGE CONNECTION
+// ═══════════════════════════════════════════════════════════
+async function connectBridge() {
+  bridgeUrl = document.getElementById('bridge-url').value.replace(/\/$/, '');
+  document.getElementById('conn-status').textContent = 'Connecting…';
+  try {
+    const r = await fetch(bridgeUrl + '/status', { signal: AbortSignal.timeout(3000) });
+    const d = await r.json();
+    bridgeOk = true;
+    setConnected(d.connected);
+    document.getElementById('conn-status').textContent = d.connected ? 'WiFi module OK' : 'Bridge only';
+    addLog('[ BRIDGE ] Connected — ' + bridgeUrl);
+    addCtrlLog('[ BRIDGE ] Connected');
+    startTelemetry();
+  } catch (e) {
+    bridgeOk = false;
+    setConnected(false);
+    document.getElementById('conn-status').textContent = 'Failed';
+    addLog('[ ERROR ] Cannot reach main.py — is it running?', 'err');
+  }
+}
+
+function setConnected(ok) {
+  document.getElementById('hw-dot').className    = 'status-dot' + (ok ? ' ok' : '');
+  document.getElementById('hw-label').textContent = ok ? 'WIFI MODULE CONNECTED' : 'DISCONNECTED';
+}
+
+// ═══════════════════════════════════════════════════════════
+// MODE SWITCHING
+// ═══════════════════════════════════════════════════════════
+async function setMode(mode) {
+  if (isEStop) {
+    addCtrlLog('[ ERROR ] Clear emergency stop before changing mode', 'err');
+    return;
+  }
+  if (mode === currentMode) return;
+
+  if (mode === 'auto') {
+    // Presentation/demo fallback: reveal the autonomous UI even when the
+    // Python bridge or Wi-Fi hardware is unavailable. No motion command is
+    // sent in this state; connecting the bridge restores normal operation.
+    if (!bridgeOk) {
+      currentMode = 'auto';
+      autoRunning = false;
+      applyModeUI('auto');
+      addLog('[ DEMO ] Autonomous interface opened offline', 'auto');
+      addAutoLog('[ DEMO ] Preview only — bridge and vehicle are not connected', 'warn');
+      return;
+    }
+    const res = await api('auto/start');
+    if (!res || !res.ok) {
+      addCtrlLog('[ ERROR ] Failed to start autonomous mode: ' + (res?.reason || ''), 'err');
+      return;
+    }
+    currentMode = 'auto';
+    autoRunning = true;
+    applyModeUI('auto');
+    addLog('[ AUTO ] Autonomous mode started — webcam + line follower active', 'auto');
+    addAutoLog('[ AUTO ] Line follower running — serial → Arduino');
+    // Auto-start stream if not active
+    if (!streamActive) startStream();
+
+    // Check shortly after if the thread bailed out due to no camera source
+    setTimeout(async () => {
+      const r = await fetch(bridgeUrl + '/status', { signal: AbortSignal.timeout(1500) }).catch(() => null);
+      if (!r) return;
+      const d = await r.json();
+      if (!d.auto_running && d.mode === 'manual') {
+        const noCam = (d.detections || []).some(x => x.label === 'NO CAMERA SOURCE');
+        currentMode = 'manual';
+        autoRunning = false;
+        applyModeUI('manual');
+        addCtrlLog('[ ERROR ] Autonomous mode failed to start' + (noCam ? ': no camera source available' : ''), 'err');
+      }
+    }, 1200);
+
+  } else {
+    // Stop auto
+    if (autoRunning) {
+      await api('auto/stop');
+      autoRunning = false;
+    }
+    currentMode = 'manual';
+    applyModeUI('manual');
+    addLog('[ MANUAL ] Switched to manual control');
+  }
+}
+
+function applyModeUI(mode) {
+  const isAuto = mode === 'auto';
+  // Mode buttons
+  document.getElementById('btn-manual').className = 'mode-btn' + (isAuto ? '' : ' active-manual');
+  document.getElementById('btn-auto').className   = 'mode-btn' + (isAuto ? ' active-auto' : '');
+  // Mode dot + label
+  document.getElementById('mode-dot').className   = 'mode-dot ' + mode;
+  document.getElementById('mode-label-badge').textContent = isAuto ? 'AUTONOMOUS' : 'MANUAL';
+  // Auto info panel
+  document.getElementById('auto-info').classList.toggle('visible', isAuto);
+  // Disable joystick in auto mode
+  ['jforward','jbackward','jleft','jright'].forEach(id => {
+    document.getElementById(id).disabled = isAuto;
+  });
+  // Camera header / footer labels — Kinect panel always shows Kinect now
+  document.getElementById('cam-title-text').textContent  = 'Kinect V2 — Live Depth Feed';
+  document.getElementById('cam-footer-label').textContent = 'Kinect V2 Depth Stream';
+  document.getElementById('cam-mode-badge').textContent   = 'DEPTH';
+  document.getElementById('cam-mode-badge').className     = 'badge mode-depth';
+  // Depth blend row always available
+  document.getElementById('depth-blend-row').style.display = '';
+  // Webcam panel — only shown (and streaming) in auto mode
+  document.getElementById('webcam-panel').style.display = isAuto ? '' : 'none';
+  // Camera row layout: side-by-side in auto, big single window in manual
+  document.getElementById('camera-row').classList.toggle('single-cam', !isAuto);
+  if (isAuto) {
+    startWebcamStream();
+  } else {
+    stopWebcamStream();
+  }
+  // Tele mode
+  const modeEl = document.getElementById('tele-mode');
+  modeEl.textContent = isAuto ? 'AUTO' : 'MANUAL';
+  modeEl.style.color = isAuto ? 'var(--purple)' : 'var(--yellow)';
+}
+
+// ═══════════════════════════════════════════════════════════
+// EMERGENCY STOP
+// ═══════════════════════════════════════════════════════════
+async function triggerEmergencyStop() {
+  await api('emergency_stop');
+  isEStop = true;
+  autoRunning = false;
+  currentMode = 'manual';
+  applyModeUI('manual');
+  // UI feedback
+  document.getElementById('estop-main-btn').classList.add('engaged');
+  document.getElementById('clear-estop-btn').classList.add('visible');
+  document.getElementById('estop-video-overlay').classList.add('active');
+  document.getElementById('estop-cam-badge').style.display = '';
+  document.getElementById('tele-status').textContent = 'E-STOP';
+  document.getElementById('tele-status').className   = 'tele-value err';
+  // Clear joystick
+  if (activeDir) {
+    document.getElementById('j' + activeDir)?.classList.remove('pressed');
+    activeDir = null;
+  }
+  document.getElementById('joy-dot').style.transform = '';
+  document.getElementById('tele-dir').textContent = '---';
+  addLog('[ ⛔ E-STOP ] Emergency stop triggered — all motion halted', 'err');
+  addCtrlLog('[ ⛔ E-STOP ] Emergency stop engaged', 'err');
+}
+
+async function clearEmergencyStop() {
+  const res = await api('emergency_clear');
+  if (!res) return;
+  isEStop = false;
+  document.getElementById('estop-main-btn').classList.remove('engaged');
+  document.getElementById('clear-estop-btn').classList.remove('visible');
+  document.getElementById('estop-video-overlay').classList.remove('active');
+  document.getElementById('estop-cam-badge').style.display = 'none';
+  document.getElementById('tele-status').textContent = 'READY';
+  document.getElementById('tele-status').className   = 'tele-value ok';
+  addLog('[ SYSTEM ] Emergency stop cleared — ready', 'warn');
+  addCtrlLog('[ SYSTEM ] E-stop cleared');
+}
+
+// ═══════════════════════════════════════════════════════════
+// KINECT / WEBCAM STREAM
+// ═══════════════════════════════════════════════════════════
+function toggleStream() {
+  streamActive ? stopStream() : startStream();
+}
+
+function startStream() {
+  if (!bridgeOk) { addLog('[ ERROR ] Connect to bridge first', 'err'); return; }
+  streamActive = true;
+  const img     = document.getElementById('kinect-stream');
+  const offline = document.getElementById('kinect-offline');
+  const badge   = document.getElementById('stream-status-badge');
+  const btn     = document.getElementById('stream-toggle-btn');
+
+  img.src = bridgeUrl + '/stream?' + Date.now();
+  img.onload = () => {
+    offline.style.display = 'none';
+    img.style.display = 'block';
+    badge.textContent = 'ONLINE'; badge.className = 'badge online';
+    addLog('[ CAM ] Stream started');
+  };
+  img.onerror = () => startPollingStream();
+
+  btn.classList.add('active');
+  document.getElementById('stream-btn-icon').className  = 'ti ti-player-stop';
+  document.getElementById('stream-btn-label').textContent = 'Stop Stream';
+  fpsTimer = setInterval(updateFPS, 1000);
+}
+
+function startPollingStream() {
+  const img = document.getElementById('kinect-stream');
+  const offline = document.getElementById('kinect-offline');
+  const badge   = document.getElementById('stream-status-badge');
+  async function poll() {
+    if (!streamActive) return;
+    try {
+      const r = await fetch(bridgeUrl + '/frame', { signal: AbortSignal.timeout(500) });
+      if (r.ok) {
+        const blob = await r.blob();
+        const url  = URL.createObjectURL(blob);
+        const old  = img.src;
+        img.src = url;
+        if (old.startsWith('blob:')) URL.revokeObjectURL(old);
+        offline.style.display = 'none';
+        img.style.display = 'block';
+        badge.textContent = 'ONLINE'; badge.className = 'badge online';
+        frameCount++;
+      }
+    } catch {}
+    if (streamActive) setTimeout(poll, 100);
+  }
+  poll();
+}
+
+function stopStream() {
+  streamActive = false;
+  const img = document.getElementById('kinect-stream');
+  img.src = ''; img.style.display = 'none';
+  document.getElementById('kinect-offline').style.display = 'flex';
+  document.getElementById('stream-status-badge').textContent = 'OFFLINE';
+  document.getElementById('stream-status-badge').className  = 'badge offline';
+  document.getElementById('stream-toggle-btn').classList.remove('active');
+  document.getElementById('stream-btn-icon').className  = 'ti ti-player-play';
+  document.getElementById('stream-btn-label').textContent = 'Start Stream';
+  document.getElementById('fps-badge').textContent = '-- fps';
+  if (fpsTimer) clearInterval(fpsTimer);
+  addLog('[ CAM ] Stream stopped');
+}
+
+function updateFPS() {
+  const fps = Math.round(frameCount / ((Date.now() - lastFpsTime) / 1000));
+  document.getElementById('fps-badge').textContent = fps + ' fps';
+  frameCount = 0; lastFpsTime = Date.now();
+}
+
+// ── Webcam / line-follower stream (autonomous mode) ──
+let webcamStreamActive = false;
+let webcamFpsTimer     = null;
+let webcamFrameCount   = 0;
+let webcamLastFpsTime  = Date.now();
+
+function startWebcamStream() {
+  if (!bridgeOk || webcamStreamActive) return;
+  webcamStreamActive = true;
+  const img     = document.getElementById('webcam-stream');
+  const offline = document.getElementById('webcam-offline');
+  const badge   = document.getElementById('stream-status-badge-2');
+
+  img.src = bridgeUrl + '/stream2?' + Date.now();
+  img.onload = () => {
+    offline.style.display = 'none';
+    img.style.display = 'block';
+    badge.textContent = 'ONLINE'; badge.className = 'badge online';
+    addAutoLog('[ CAM ] Webcam stream started');
+  };
+  img.onerror = () => startWebcamPolling();
+
+  webcamFpsTimer = setInterval(() => {
+    const fps = Math.round(webcamFrameCount / ((Date.now() - webcamLastFpsTime) / 1000));
+    document.getElementById('fps-badge-2').textContent = fps + ' fps';
+    webcamFrameCount = 0; webcamLastFpsTime = Date.now();
+  }, 1000);
+}
+
+function startWebcamPolling() {
+  const img = document.getElementById('webcam-stream');
+  const offline = document.getElementById('webcam-offline');
+  const badge   = document.getElementById('stream-status-badge-2');
+  async function poll() {
+    if (!webcamStreamActive) return;
+    try {
+      const r = await fetch(bridgeUrl + '/frame2', { signal: AbortSignal.timeout(500) });
+      if (r.ok) {
+        const blob = await r.blob();
+        const url  = URL.createObjectURL(blob);
+        const old  = img.src;
+        img.src = url;
+        if (old.startsWith('blob:')) URL.revokeObjectURL(old);
+        offline.style.display = 'none';
+        img.style.display = 'block';
+        badge.textContent = 'ONLINE'; badge.className = 'badge online';
+        webcamFrameCount++;
+      }
+    } catch {}
+    if (webcamStreamActive) setTimeout(poll, 100);
+  }
+  poll();
+}
+
+function stopWebcamStream() {
+  webcamStreamActive = false;
+  const img = document.getElementById('webcam-stream');
+  img.src = ''; img.style.display = 'none';
+  document.getElementById('webcam-offline').style.display = 'flex';
+  document.getElementById('stream-status-badge-2').textContent = 'OFFLINE';
+  document.getElementById('stream-status-badge-2').className  = 'badge offline';
+  document.getElementById('fps-badge-2').textContent = '-- fps';
+  if (webcamFpsTimer) clearInterval(webcamFpsTimer);
+}
+
+function updateBlend(v) {
+  document.getElementById('blend-pct').textContent = v + '%';
+  if (bridgeOk) {
+    fetch(bridgeUrl + '/depth_blend', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({blend: parseInt(v)/100}),
+      signal: AbortSignal.timeout(500),
+    }).catch(() => {});
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// TELEMETRY POLL
+// ═══════════════════════════════════════════════════════════
+function startTelemetry() {
+  if (telemTimer) clearInterval(telemTimer);
+  telemTimer = setInterval(async () => {
+    if (!bridgeOk) return;
+    try {
+      const r = await fetch(bridgeUrl + '/status', { signal: AbortSignal.timeout(1500) });
+      const d = await r.json();
+      setConnected(d.connected);
+      document.getElementById('tele-speed').textContent = d.speed ?? 0;
+      document.getElementById('tele-steer').textContent = (d.steer ?? 0).toFixed(1);
+      const forkLabel = { ST:'STOPPED', UP:'RISING', DN:'LOWERING' };
+      document.getElementById('tele-fork').textContent  = forkLabel[d.fork] ?? d.fork ?? 'ST';
+
+      // Sync E-stop from server
+      if (d.emergency_stop && !isEStop) {
+        isEStop = true;
+        document.getElementById('estop-main-btn').classList.add('engaged');
+        document.getElementById('clear-estop-btn').classList.add('visible');
+        document.getElementById('estop-video-overlay').classList.add('active');
+        document.getElementById('estop-cam-badge').style.display = '';
+        document.getElementById('tele-status').textContent = 'E-STOP';
+        document.getElementById('tele-status').className   = 'tele-value err';
+      }
+
+      // Auto stats
+      if (d.mode === 'auto' && d.auto_running) {
+        document.getElementById('auto-angle').textContent = (d.steer ?? 0).toFixed(1) + '°';
+        document.getElementById('auto-cmd').textContent   = d.speed === 0 ? 'STOP/NL' : `A:${(d.steer??0).toFixed(1)}`;
+        if (d.detections && d.detections.length > 0) {
+          document.getElementById('auto-person').textContent = 'DETECTED';
+          document.getElementById('auto-person').style.color = 'var(--red)';
+          document.getElementById('detect-status').textContent = d.detections.length + ' DETECTED';
+          document.getElementById('detect-status').style.color = 'var(--red)';
+          addAutoLog('[ YOLO ] Person detected — STOPPED', 'err');
+        } else {
+          document.getElementById('auto-person').textContent = 'CLEAR';
+          document.getElementById('auto-person').style.color = 'var(--green)';
+          document.getElementById('detect-status').textContent = 'NO DETECTIONS';
+          document.getElementById('detect-status').style.color = '';
+        }
+      } else {
+        if (d.detections && d.detections.length > 0) {
+          const noCam = d.detections.some(x => x.label === 'NO CAMERA SOURCE');
+          if (noCam) {
+            document.getElementById('detect-status').textContent = 'NO CAMERA SOURCE';
+            document.getElementById('detect-status').style.color = 'var(--red)';
+            addCtrlLog('[ ERROR ] Autonomous mode: no camera source available', 'err');
+          } else {
+            const labels = d.detections.map(x => x.label).join(', ');
+            document.getElementById('detect-status').textContent = d.detections.length + ' DETECTED: ' + labels;
+            document.getElementById('detect-status').style.color = 'var(--green)';
+          }
+        } else {
+          document.getElementById('detect-status').textContent = 'NO DETECTIONS';
+          document.getElementById('detect-status').style.color = '';
+        }
+      }
+    } catch {}
+  }, 500);
+}
+
+// ═══════════════════════════════════════════════════════════
+// REST HELPER
+// ═══════════════════════════════════════════════════════════
+async function api(endpoint, body = {}) {
+  if (!bridgeOk) { addCtrlLog('[ ERROR ] Not connected', 'err'); return null; }
+  try {
+    const r = await fetch(bridgeUrl + '/' + endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(2000),
+    });
+    return await r.json();
+  } catch (e) {
+    addCtrlLog('[ ERROR ] ' + endpoint + ': ' + e.message, 'err');
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// JOYSTICK — DRIVE
+// ═══════════════════════════════════════════════════════════
+const dirLabels = { forward:'FWD', backward:'REV', left:'LEFT', right:'RIGHT' };
+const dotPos    = {
+  forward:'translateY(-10px)', backward:'translateY(10px)',
+  left:'translateX(-10px)', right:'translateX(10px)'
+};
+
+async function joyPress(dir) {
+  if (isEStop || currentMode === 'auto') return;
+  if (activeDir === dir) return;
+  activeDir = dir;
+  document.getElementById('j' + dir)?.classList.add('pressed');
+  document.getElementById('tele-dir').textContent = dirLabels[dir] ?? dir.toUpperCase();
+  document.getElementById('joy-dot').style.transform = dotPos[dir] ?? '';
+  if (dir === 'forward')       await api('forward',  { speed: manSpeed });
+  else if (dir === 'backward') await api('backward', { speed: manSpeed });
+  else if (dir === 'left')     await api('left');
+  else if (dir === 'right')    await api('right');
+  addCtrlLog('[ CTRL ] ' + dir.toUpperCase() + '  speed=' + manSpeed);
+}
+
+async function joyRelease(dir) {
+  if (activeDir !== dir) return;
+  activeDir = null;
+  document.getElementById('j' + dir)?.classList.remove('pressed');
+  document.getElementById('tele-dir').textContent = '---';
+  document.getElementById('joy-dot').style.transform = '';
+  await api('stop');
+}
+
+function updateSpeed(v) {
+  manSpeed = parseInt(v);
+  document.getElementById('speed-disp').textContent = v;
+  document.getElementById('tele-speed').textContent = v;
+}
+
+// ═══════════════════════════════════════════════════════════
+// FORK
+// ═══════════════════════════════════════════════════════════
+async function forkCmd(dir) {
+  if (isEStop) return;
+  if (dir === 'up')        await api('fork_up');
+  else if (dir === 'down') await api('fork_down');
+  else                     await api('fork_stop');
+  addCtrlLog('[ FORK ] ' + dir.toUpperCase());
+}
+
+// ═══════════════════════════════════════════════════════════
+// KEYBOARD SHORTCUTS
+// ═══════════════════════════════════════════════════════════
+const keyMap = {
+  ArrowUp:'forward',   KeyW:'forward',
+  ArrowDown:'backward',KeyS:'backward',
+  ArrowLeft:'left',    KeyA:'left',
+  ArrowRight:'right',  KeyD:'right',
+};
+document.addEventListener('keydown', e => {
+  if (e.repeat) return;
+  if (keyMap[e.code]) { joyPress(keyMap[e.code]); return; }
+  if (e.code === 'KeyQ') forkCmd('up');
+  if (e.code === 'KeyE') forkCmd('down');
+  if (e.code === 'Space') { e.preventDefault(); triggerEmergencyStop(); }
+});
+document.addEventListener('keyup', e => {
+  if (keyMap[e.code]) joyRelease(keyMap[e.code]);
+  if (e.code === 'KeyQ' || e.code === 'KeyE') forkCmd('stop');
+});
+
+// ═══════════════════════════════════════════════════════════
+// LOG HELPERS
+// ═══════════════════════════════════════════════════════════
+function addLog(msg, cls = '') { _appendLog('log', msg, cls); }
+function addCtrlLog(msg, cls = '') { _appendLog('ctrl-log', msg, cls); }
+function addAutoLog(msg, cls = 'auto') { _appendLog('auto-log', msg, cls); }
+function _appendLog(id, msg, cls) {
+  const box = document.getElementById(id);
+  if (!box) return;
+  const line = document.createElement('div');
+  line.className = 'log-entry' + (cls ? ' ' + cls : '');
+  line.textContent = new Date().toTimeString().slice(0, 8) + '  ' + msg;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+  const lines = box.querySelectorAll('.log-entry');
+  if (lines.length > 60) lines[0].remove();
+}
+</script>
+</body>
+</html>
